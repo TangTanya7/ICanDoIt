@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.cursor/
+.vscode/
+
+# Android / iOS build artifacts
+app/android/.gradle/
+app/android/build/
+app/android/app/build/
+app/ios/App/Pods/
+app/ios/App/DerivedData/
+app/ios/.build/
+
+# Logs
+*.log
+npm-debug.log*
