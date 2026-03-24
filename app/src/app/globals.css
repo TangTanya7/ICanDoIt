@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+/* ===== Hand-drawn Childlike Design System ===== */
+
+@theme inline {
+  --color-background: #FFF8F0;
+  --color-foreground: #2D3436;
+
+  /* Brand Colors - 手绘色块风 */
+  --color-brand-coral: #FF6B6B;
+  --color-brand-coral-light: #FF8E8E;
+  --color-brand-orange: #FF9F43;
+  --color-brand-orange-light: #FFB976;
+  --color-brand-blue: #4A90D9;
+  --color-brand-blue-light: #74AAEE;
+  --color-brand-blue-deep: #3B6DB5;
+  --color-brand-green: #95D847;
+  --color-brand-green-light: #B0E676;
+  --color-brand-yellow: #FFD93D;
+  --color-brand-yellow-light: #FFE57A;
+  --color-brand-purple: #A78BFA;
+  --color-brand-purple-light: #C4B5FD;
+  --color-brand-pink: #F472B6;
+  --color-brand-teal: #4ECDC4;
+  --color-brand-cream: #FFF8F0;
+  --color-brand-beige: #FFF3E4;
+  --color-brand-card: #FFFFFF;
+  --color-brand-dark: #2D3436;
+  --color-brand-gray: #636E72;
+  --color-brand-gray-light: #B2BEC3;
+  --color-brand-gray-pale: #DFE6E9;
+  --color-brand-border: #F0E6D8;
+
+  /* Task Card Accent Colors */
+  --color-task-coral: #FF6B6B;
+  --color-task-orange: #FF9F43;
+  --color-task-blue: #4A90D9;
+  --color-task-green: #95D847;
+  --color-task-purple: #A78BFA;
+  --color-task-pink: #F472B6;
+  --color-task-teal: #4ECDC4;
+  --color-task-yellow: #FFD93D;
+
+  --font-sans: "Nunito", system-ui, -apple-system, sans-serif;
+  --font-display: "Nunito", system-ui, sans-serif;
+
+  /* Spacing */
+  --spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap");
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+}
+
+@layer components {
+  .mobile-container {
+    width: 375px;
+    height: 812px;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-background);
+  }
+
+  .card-hand-drawn {
+    background: var(--color-brand-card);
+    border-radius: 20px;
+    border: 2.5px solid var(--color-brand-border);
+    transition: transform 0.15s ease;
+  }
+
+  .card-hand-drawn:active {
+    transform: scale(0.98) translateY(1px);
+  }
+
+  .btn-playful {
+    border-radius: 16px;
+    font-weight: 700;
+    border: 2.5px solid transparent;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  .btn-playful:active {
+    transform: translateY(2px);
+  }
+
+  .streak-badge {
+    background: linear-gradient(135deg, var(--color-brand-orange), var(--color-brand-coral));
+    color: white;
+    font-weight: 800;
+    border-radius: 14px;
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes check-pop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes plan-course-scroll {
+  0%, 16% { transform: translateY(0); }
+  32%, 48% { transform: translateY(-54px); }
+  64%, 80% { transform: translateY(-108px); }
+  100% { transform: translateY(-162px); }
+}

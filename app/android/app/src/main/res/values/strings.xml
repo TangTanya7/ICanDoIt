@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ICanDoIt</string>
+    <string name="title_activity_main">ICanDoIt</string>
+    <string name="package_name">com.icandoit.app</string>
+    <string name="custom_url_scheme">com.icandoit.app</string>
+</resources>
