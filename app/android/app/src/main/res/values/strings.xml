@@ -4,4 +4,5 @@
     <string name="title_activity_main">ICanDoIt</string>
     <string name="package_name">com.icandoit.app</string>
     <string name="custom_url_scheme">com.icandoit.app</string>
+    <string name="widget_description">快速开始今日学习任务</string>
 </resources>

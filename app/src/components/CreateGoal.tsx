@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Goal, GoalCategory, GoalPhase, GoalResource, GOAL_CATEGORY_META, TaskColor } from "@/types";
+import { Goal, GoalCategory, GoalPhase, GoalResource, GOAL_CATEGORY_META, TaskColor, DailyTask } from "@/types";
 import { TASK_COLORS, getCardBackgroundColor, getCardAccentColor } from "@/lib/colors";
+import { findTopicResources, pickResources, type TopicResource } from "@/lib/resource-library";
+import { API_BASE } from "@/lib/api-base";
 import {
   ArrowLeft,
   Brain,
@@ -20,7 +22,7 @@ import {
 
 interface CreateGoalProps {
   onBack: () => void;
-  onComplete: (goal: Goal) => void;
+  onComplete: (goal: Goal & { _tasks?: Partial<DailyTask>[] }) => void;
   hideBack?: boolean;
 }
 
@@ -616,16 +618,21 @@ function buildGoal(
   duration: number,
   dailyMinutes: number,
   customResources: GoalResource[],
-): Goal {
+): Goal & { _tasks: Partial<DailyTask>[] } {
   const phaseCount = Math.min(Math.ceil(duration / 15), 4);
   const perPhase = Math.ceil(duration / phaseCount);
-  const { phaseNames, phaseDescs } = resolvePlan(title, description, category);
+
+  const topicMatch = findTopicResources(title, description);
+  const { phaseNames, phaseDescs, phaseTasks } = resolvePlan(title, description, category);
+
+  const resolvedPhaseNames = topicMatch?.phaseNames ?? phaseNames;
+  const resolvedPhaseDescs = topicMatch?.phaseDescs ?? phaseDescs;
 
   const phases: GoalPhase[] = Array.from({ length: phaseCount }, (_, i) => ({
     id: `new-p${i + 1}`,
     phaseNumber: i + 1,
-    title: phaseNames[i] ?? `阶段${i + 1}`,
-    description: phaseDescs[i] ?? "持续精进",
+    title: resolvedPhaseNames[i] ?? phaseNames[i] ?? `阶段${i + 1}`,
+    description: resolvedPhaseDescs[i] ?? phaseDescs[i] ?? "持续精进",
     skills: [],
     startDay: i * perPhase + 1,
     endDay: Math.min((i + 1) * perPhase, duration),
@@ -638,11 +645,91 @@ function buildGoal(
   const endDate = new Date(today);
   endDate.setDate(endDate.getDate() + duration);
 
+  const icon = GOAL_CATEGORY_META[category].icon;
+  const goalId = `g-${Date.now()}`;
+
+  const tasks: Partial<DailyTask>[] = [];
+  let topicResources: TopicResource[] | null = null;
+  if (topicMatch) {
+    topicResources = pickResources(topicMatch, duration * 2);
+  }
+
+  const catTasks = CATEGORY_SAMPLE_TASKS[category] ?? CATEGORY_SAMPLE_TASKS["other"];
+  const phaseKeys = Object.keys(catTasks);
+
+  for (let day = 0; day < duration; day++) {
+    const taskDate = new Date(today);
+    taskDate.setDate(taskDate.getDate() + day);
+    const dateStr = taskDate.toISOString().split("T")[0];
+
+    let phaseIdx = 0;
+    for (let p = 0; p < phaseCount; p++) {
+      if (day + 1 >= phases[p].startDay && day + 1 <= phases[p].endDay) {
+        phaseIdx = p;
+        break;
+      }
+    }
+
+    const dayInPhase = day + 1 - phases[phaseIdx].startDay;
+
+    if (customResources.length > 0) {
+      const res = customResources[day % customResources.length];
+      const lessonNum = dayInPhase + 1;
+      const templates = PHASE_TASK_TEMPLATES[phaseIdx] ?? PHASE_TASK_TEMPLATES[0];
+      const template = templates[day % templates.length];
+      tasks.push({
+        title: template(lessonNum),
+        description: `${phases[phaseIdx].title} · 第${lessonNum}天`,
+        date: dateStr,
+        color,
+        icon,
+        resourceUrl: res.url,
+        resourceTitle: res.title,
+        resourcePlatform: extractPlatform(res.url),
+        estimatedMinutes: dailyMinutes,
+      });
+    } else if (topicResources) {
+      const res = topicResources[day % topicResources.length];
+      const lessonNum = dayInPhase + 1;
+      const taskTitles = [
+        `学习${phases[phaseIdx].title}·第${lessonNum}课`,
+        `练习${phases[phaseIdx].title}·要点巩固`,
+        `${phases[phaseIdx].title}·总结与复习`,
+      ];
+      tasks.push({
+        title: taskTitles[day % taskTitles.length],
+        description: `${phases[phaseIdx].title} · 第${lessonNum}天`,
+        date: dateStr,
+        color,
+        icon,
+        resourceUrl: res.url,
+        resourceTitle: res.title,
+        resourcePlatform: res.platform,
+        estimatedMinutes: dailyMinutes,
+      });
+    } else {
+      const phaseKey = phaseKeys[phaseIdx % phaseKeys.length];
+      const sampleList = catTasks[phaseKey] ?? catTasks[phaseKeys[0]];
+      const sample = sampleList[day % sampleList.length];
+      tasks.push({
+        title: sample.title,
+        description: `${phases[phaseIdx].title} · 第${dayInPhase + 1}天`,
+        date: dateStr,
+        color,
+        icon,
+        resourceUrl: sample.url,
+        resourceTitle: sample.resource,
+        resourcePlatform: sample.platform,
+        estimatedMinutes: dailyMinutes,
+      });
+    }
+  }
+
   return {
-    id: `g-${Date.now()}`,
+    id: goalId,
     title,
     category,
-    icon: GOAL_CATEGORY_META[category].icon,
+    icon,
     startDate: today.toISOString().split("T")[0],
     endDate: endDate.toISOString().split("T")[0],
     totalDays: duration,
@@ -655,6 +742,7 @@ function buildGoal(
     status: "active",
     phases,
     customResources,
+    _tasks: tasks,
   };
 }
 
@@ -684,7 +772,7 @@ function buildFallbackTitle(url: string): string {
 
 async function fetchResourceTitle(url: string): Promise<string> {
   try {
-    const res = await fetch("/api/fetch-title", {
+    const res = await fetch(`${API_BASE}/api/fetch-title`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),

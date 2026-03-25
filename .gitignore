@@ -33,3 +33,5 @@ app/ios/.build/
 # Logs
 *.log
 npm-debug.log*
+chat-history/
+chat-history.zip

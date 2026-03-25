@@ -1,3 +1,10 @@
+export interface User {
+  id: string;
+  phone: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 export interface Goal {
   id: string;
   title: string;

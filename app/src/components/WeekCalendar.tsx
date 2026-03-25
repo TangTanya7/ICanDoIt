@@ -39,12 +39,16 @@ export default function WeekCalendar({
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 min-w-0">
-          {currentStreak > 0 && (
-            <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#222222] text-white text-[12px] font-extrabold leading-none whitespace-nowrap shrink-0">
-              <StreakFire size={16} />
-              <span>连续{currentStreak}天</span>
-            </div>
-          )}
+          <div
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-extrabold leading-none whitespace-nowrap shrink-0"
+            style={{
+              backgroundColor: currentStreak > 0 ? "#222222" : "#E8E8E8",
+              color: currentStreak > 0 ? "#FFFFFF" : "rgba(34,34,34,0.5)",
+            }}
+          >
+            <StreakFire size={16} />
+            <span>{currentStreak > 0 ? `连续${currentStreak}天` : "尚未连胜"}</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-0 shrink-0">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   format,
   addWeeks,
@@ -24,14 +24,27 @@ import Onboarding from "@/components/Onboarding";
 import ComebackModal from "@/components/ComebackModal";
 import TaskFeedbackToast, { TaskFeedbackInfo } from "@/components/TaskFeedbackToast";
 import { DoodleCorner } from "@/components/Doodles";
-import { getWeekDays, mockStreak, mockTasks, mockGoals } from "@/lib/mock-data";
-import { DailyTask, Goal } from "@/types";
+import { getWeekDays } from "@/lib/mock-data";
+import { DailyTask, Goal, StreakInfo } from "@/types";
+import { useAuth } from "@/lib/auth-context";
+import { API_BASE } from "@/lib/api-base";
+import { syncWidgetData } from "@/lib/widget-sync";
+import LoginPage from "@/components/LoginPage";
 
 type CalendarView = "week" | "month";
 type GoalView = "list" | "detail" | "create";
 type Tab = "tasks" | "goals" | "companion" | "profile";
 
+const DEFAULT_STREAK: StreakInfo = {
+  currentStreak: 0,
+  bestStreak: 0,
+  totalCompleted: 0,
+  thisWeekCompleted: 0,
+  thisWeekTotal: 0,
+};
+
 export default function Home() {
+  const { user, isLoading: authLoading, isLoggedIn, logout } = useAuth();
   const [isHydrated, setIsHydrated] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -42,7 +55,8 @@ export default function Home() {
     format(new Date(), "yyyy-MM-dd")
   );
   const [activeTab, setActiveTab] = useState<Tab>("tasks");
-  const [tasks, setTasks] = useState<DailyTask[]>(mockTasks);
+  const [tasks, setTasks] = useState<DailyTask[]>([]);
+  const [streak, setStreak] = useState<StreakInfo>(DEFAULT_STREAK);
   const [showReminderSheet, setShowReminderSheet] = useState(false);
   const [showStatsSheet, setShowStatsSheet] = useState(false);
   const [showFeedbackSheet, setShowFeedbackSheet] = useState(false);
@@ -51,6 +65,8 @@ export default function Home() {
   const [reminderHour, setReminderHour] = useState(8);
   const [reminderMinute, setReminderMinute] = useState(0);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const hourScrollRef = useRef<HTMLDivElement>(null);
+  const minuteScrollRef = useRef<HTMLDivElement>(null);
   const REMINDER_ANCHORS = [
     { value: "morning", label: "起床后",  icon: "☀️", defaultHour: 8,  defaultMinute: 0  },
     { value: "brush",   label: "刷牙后",  icon: "🪥", defaultHour: 8,  defaultMinute: 10 },
@@ -65,7 +81,7 @@ export default function Home() {
   const reminderTimeLabel = `${String(reminderHour).padStart(2, "0")}:${String(reminderMinute).padStart(2, "0")}`;
 
   // Goals state
-  const [goals, setGoals] = useState<Goal[]>(mockGoals);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [goalView, setGoalView] = useState<GoalView>("list");
   const [goalCreateFromOnboarding, setGoalCreateFromOnboarding] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
@@ -80,19 +96,51 @@ export default function Home() {
     setTimeout(() => setSimpleToast(null), 3000);
   }, []);
 
-  useEffect(() => {
-    const shouldForceOnboarding = process.env.NODE_ENV === "development";
-    setShowOnboarding(shouldForceOnboarding || !localStorage.getItem("icandoit_onboarded"));
-    setIsHydrated(true);
+  const loadUserData = useCallback(async () => {
+    try {
+      const [goalsRes, tasksRes, streakRes] = await Promise.all([
+        fetch(`${API_BASE}/api/goals`),
+        fetch(`${API_BASE}/api/tasks`),
+        fetch(`${API_BASE}/api/stats/streak`),
+      ]);
+
+      if (goalsRes.ok) {
+        const data = await goalsRes.json();
+        setGoals(data.goals || []);
+      }
+      if (tasksRes.ok) {
+        const data = await tasksRes.json();
+        setTasks(data.tasks || []);
+      }
+      if (streakRes.ok) {
+        const data = await streakRes.json();
+        setStreak(data.streak || DEFAULT_STREAK);
+      }
+    } catch (e) {
+      console.error("Failed to load user data:", e);
+    }
   }, []);
 
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setIsHydrated(true);
+      return;
+    }
+
+    const onboarded = localStorage.getItem(`icandoit_onboarded_${user?.id}`);
+    setShowOnboarding(!onboarded);
+    setIsHydrated(true);
+
+    loadUserData();
+  }, [isLoggedIn, user?.id, loadUserData]);
+
   const handleOnboardingComplete = useCallback(() => {
-    localStorage.setItem("icandoit_onboarded", "1");
+    if (user?.id) localStorage.setItem(`icandoit_onboarded_${user.id}`, "1");
     setShowOnboarding(false);
     setActiveTab("goals");
     setGoalView("create");
     setGoalCreateFromOnboarding(true);
-  }, []);
+  }, [user?.id]);
 
   const referenceDate = useMemo(
     () => addWeeks(new Date(), weekOffset),
@@ -140,19 +188,28 @@ export default function Home() {
     [tasks, selectedDate]
   );
 
+  useEffect(() => {
+    if (tasks.length > 0) syncWidgetData(tasks);
+  }, [tasks]);
+
   const handleToggle = useCallback((taskId: string) => {
     setTasks((prev) => {
       const target = prev.find((t) => t.id === taskId);
       if (!target) return prev;
 
       const isCompleting = target.status !== "completed";
+      const newStatus = isCompleting ? "completed" : "pending";
+      const completedAt = isCompleting ? new Date().toISOString() : undefined;
+
+      fetch(`${API_BASE}/api/tasks/${taskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus, completedAt }),
+      }).catch(console.error);
+
       const next = prev.map((t) =>
         t.id === taskId
-          ? {
-              ...t,
-              status: (isCompleting ? "completed" : "pending") as DailyTask["status"],
-              completedAt: isCompleting ? new Date().toISOString() : undefined,
-            }
+          ? { ...t, status: newStatus as DailyTask["status"], completedAt }
           : t
       );
 
@@ -165,14 +222,14 @@ export default function Home() {
           completedCount: todayDone,
           totalCount: todayTasks.length,
           totalCompleted: allCompleted,
-          currentStreak: mockStreak.currentStreak,
+          currentStreak: streak.currentStreak,
           isAllDone: todayDone === todayTasks.length,
         });
       }
 
       return next;
     });
-  }, [selectedDate]);
+  }, [selectedDate, streak.currentStreak]);
 
   const handleTabChange = useCallback((tab: Tab) => {
     setActiveTab(tab);
@@ -188,17 +245,38 @@ export default function Home() {
     setGoalView("detail");
   }, []);
 
-  const handleGoalCreate = useCallback((newGoal: Goal) => {
-    setGoals((prev) => [newGoal, ...prev]);
+  const handleGoalCreate = useCallback(async (newGoal: Goal & { _tasks?: Partial<DailyTask>[] }) => {
     setGoalView("list");
-  }, []);
+    const { _tasks, ...goalData } = newGoal;
+    try {
+      const res = await fetch(`${API_BASE}/api/goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...goalData, tasks: _tasks || [] }),
+      });
+      if (res.ok) {
+        await loadUserData();
+      } else {
+        setGoals((prev) => [goalData, ...prev]);
+      }
+    } catch {
+      setGoals((prev) => [goalData, ...prev]);
+    }
+  }, [loadUserData]);
 
-  const handleGoalDelete = useCallback((goalId: string) => {
+  const handleGoalDelete = useCallback(async (goalId: string) => {
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
     setSelectedGoal(null);
     setSelectedGoalDisplayColor(null);
     setGoalView("list");
-  }, []);
+
+    try {
+      await fetch(`${API_BASE}/api/goals/${goalId}`, { method: "DELETE" });
+      await loadUserData();
+    } catch (e) {
+      console.error("Delete goal error:", e);
+    }
+  }, [loadUserData]);
 
   const selectedDateObj = parseISO(selectedDate);
   const isTodaySelected = isToday(selectedDateObj);
@@ -207,8 +285,12 @@ export default function Home() {
     startOfDay(new Date())
   );
 
-  if (!isHydrated) {
+  if (!isHydrated || authLoading) {
     return null;
+  }
+
+  if (!isLoggedIn) {
+    return <LoginPage />;
   }
 
   if (showOnboarding) {
@@ -234,7 +316,7 @@ export default function Home() {
                 weekDays={weekDays}
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
-                currentStreak={mockStreak.currentStreak}
+                currentStreak={streak.currentStreak}
                 onPrevWeek={() => setWeekOffset((o) => o - 1)}
                 onNextWeek={() => setWeekOffset((o) => o + 1)}
                 onToggleView={() => setCalendarView("month")}
@@ -244,7 +326,7 @@ export default function Home() {
                 currentMonth={currentMonth}
                 selectedDate={selectedDate}
                 tasks={tasks}
-                currentStreak={mockStreak.currentStreak}
+                currentStreak={streak.currentStreak}
                 onSelectDate={setSelectedDate}
                 onPrevMonth={() => setMonthOffset((o) => o - 1)}
                 onNextMonth={() => setMonthOffset((o) => o + 1)}
@@ -381,15 +463,6 @@ export default function Home() {
                       "我说：每天 10 分钟而已。",
                     ],
                   },
-                  {
-                    img: "/vision/stage-speech.jpg",
-                    lines: [
-                      "全英文会议上我直接开麦，",
-                      "老板当场 cue 我做主讲。",
-                      "散会后同事发消息：",
-                      "'你什么时候这么猛的？'",
-                    ],
-                  },
                 ].map((item, i) => {
                   const isEven = i % 2 === 0;
                   return (
@@ -442,9 +515,19 @@ export default function Home() {
                 <div className="w-14 h-14 rounded-full bg-[#F7DFE8] flex items-center justify-center text-2xl shrink-0">
                   🙋
                 </div>
-                <div>
-                  <h2 className="text-[20px] font-black text-[#222222] leading-tight">我的</h2>
-                  <p className="text-[12px] text-black/45 font-medium">坚持学习第 15 天</p>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[20px] font-black text-[#222222] leading-tight">{user?.name || "我的"}</h2>
+                    <button
+                      onClick={() => { logout(); }}
+                      className="text-[11px] text-black/30 font-medium px-2 py-1 rounded-lg active:bg-black/5"
+                    >
+                      退出登录
+                    </button>
+                  </div>
+                  <p className="text-[12px] text-black/45 font-medium">
+                    {streak.currentStreak > 0 ? `坚持学习第 ${streak.currentStreak} 天` : "开始你的学习之旅"}
+                  </p>
                 </div>
               </div>
 
@@ -452,7 +535,18 @@ export default function Home() {
                 <button
                   className="w-full flex items-center justify-between px-4 py-3.5 active:bg-black/3 transition-colors"
                   style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}
-                  onClick={() => { setShowReminderSheet(true); setShowTimePicker(true); }}
+                  onClick={() => {
+                    setShowReminderSheet(true);
+                    setShowTimePicker(true);
+                    setTimeout(() => {
+                      const itemH = 40;
+                      const containerH = 160;
+                      const hIdx = HOURS.indexOf(reminderHour);
+                      const mIdx = MINUTES.indexOf(reminderMinute);
+                      hourScrollRef.current?.scrollTo({ top: Math.max(0, hIdx * itemH - (containerH - itemH) / 2), behavior: "smooth" });
+                      minuteScrollRef.current?.scrollTo({ top: Math.max(0, mIdx * itemH - (containerH - itemH) / 2), behavior: "smooth" });
+                    }, 50);
+                  }}
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="text-[16px]">🪝</span>
@@ -470,23 +564,16 @@ export default function Home() {
               </div>
 
               <div className="rounded-[24px] overflow-hidden mb-4" style={{ backgroundColor: "#FFFFFF" }}>
-                {[
-                  { icon: "📊", label: "学习统计", onClick: () => setShowStatsSheet(true) },
-                  { icon: "📤", label: "导出学习记录", onClick: () => showSimpleToast("📤", "导出功能即将上线") },
-                ].map((item, i, arr) => (
-                  <button
-                    key={i}
-                    onClick={item.onClick}
-                    className="w-full flex items-center justify-between px-4 py-3.5 active:bg-black/3 transition-colors"
-                    style={{ borderBottom: i < arr.length - 1 ? "1px solid rgba(0,0,0,0.05)" : "none" }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[16px]">{item.icon}</span>
-                      <span className="text-[14px] font-bold text-[#222222]">{item.label}</span>
-                    </div>
-                    <span className="text-[13px] text-black/30">›</span>
-                  </button>
-                ))}
+                <button
+                  onClick={() => setShowStatsSheet(true)}
+                  className="w-full flex items-center justify-between px-4 py-3.5 active:bg-black/3 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[16px]">📊</span>
+                    <span className="text-[14px] font-bold text-[#222222]">学习统计</span>
+                  </div>
+                  <span className="text-[13px] text-black/30">›</span>
+                </button>
               </div>
 
               <div className="rounded-[24px] overflow-hidden" style={{ backgroundColor: "#FFFFFF" }}>
@@ -528,15 +615,17 @@ export default function Home() {
 
       {/* Simple Toast */}
       {simpleToast && (
-        <div
-          className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-3 rounded-[20px] shadow-lg whitespace-nowrap"
-          style={{
-            backgroundColor: "#222222",
-            animation: "slide-up 0.3s ease-out",
-          }}
-        >
-          <span className="text-[16px]">{simpleToast.emoji}</span>
-          <span className="text-[13px] font-bold text-white">{simpleToast.text}</span>
+        <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none">
+          <div
+            className="flex items-center gap-2 px-5 py-3.5 rounded-[20px] shadow-lg whitespace-nowrap"
+            style={{
+              backgroundColor: "#222222",
+              animation: "slide-up 0.3s ease-out",
+            }}
+          >
+            <span className="text-[16px]">{simpleToast.emoji}</span>
+            <span className="text-[13px] font-bold text-white">{simpleToast.text}</span>
+          </div>
         </div>
       )}
 
@@ -598,9 +687,9 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               {[
-                { label: "累计学习天数", value: `${goals.reduce((s, g) => s + g.completedDays, 0) || 15} 天`, icon: "📅" },
-                { label: "当前连续打卡", value: `${goals[0]?.currentStreak ?? 5} 天`, icon: "🔥" },
-                { label: "完成任务总数", value: `${tasks.filter(t => t.status === "completed").length} 个`, icon: "✅" },
+                { label: "累计学习天数", value: `${goals.reduce((s, g) => s + g.completedDays, 0)} 天`, icon: "📅" },
+                { label: "当前连续打卡", value: `${streak.currentStreak} 天`, icon: "🔥" },
+                { label: "完成任务总数", value: `${streak.totalCompleted} 个`, icon: "✅" },
                 { label: "进行中目标", value: `${goals.filter(g => g.status === "active").length} 个`, icon: "🎯" },
               ].map((stat, i) => (
                 <div key={i} className="rounded-[20px] p-3.5" style={{ backgroundColor: "#F7F7F7" }}>
@@ -611,8 +700,10 @@ export default function Home() {
               ))}
             </div>
             <div className="rounded-[20px] p-4" style={{ backgroundColor: "#F7DFE8" }}>
-              <p className="text-[13px] font-extrabold text-[#222222] mb-0.5">🏅 你已坚持 15 天</p>
-              <p className="text-[12px] font-medium" style={{ color: "rgba(34,34,34,0.6)" }}>继续保持，21 天形成习惯，你快到了！</p>
+              <p className="text-[13px] font-extrabold text-[#222222] mb-0.5">🏅 你已坚持 {streak.currentStreak} 天</p>
+              <p className="text-[12px] font-medium" style={{ color: "rgba(34,34,34,0.6)" }}>
+                {streak.currentStreak >= 21 ? "太棒了，你已经养成了习惯！" : `继续保持，21 天形成习惯${streak.currentStreak > 0 ? `，还差 ${21 - streak.currentStreak} 天！` : "！"}`}
+              </p>
             </div>
           </div>
         </div>
@@ -631,7 +722,20 @@ export default function Home() {
             <div className="grid grid-cols-3 gap-2 mb-5">
               {REMINDER_ANCHORS.map(opt => (
                 <button key={opt.value}
-                  onClick={() => { setReminderAnchor(opt.value); setReminderHour(opt.defaultHour); setReminderMinute(opt.defaultMinute); setShowTimePicker(true); }}
+                  onClick={() => {
+                    setReminderAnchor(opt.value);
+                    setReminderHour(opt.defaultHour);
+                    setReminderMinute(opt.defaultMinute);
+                    setShowTimePicker(true);
+                    setTimeout(() => {
+                      const itemH = 40;
+                      const containerH = 160;
+                      const hIdx = HOURS.indexOf(opt.defaultHour);
+                      const mIdx = MINUTES.indexOf(opt.defaultMinute);
+                      hourScrollRef.current?.scrollTo({ top: Math.max(0, hIdx * itemH - (containerH - itemH) / 2), behavior: "smooth" });
+                      minuteScrollRef.current?.scrollTo({ top: Math.max(0, mIdx * itemH - (containerH - itemH) / 2), behavior: "smooth" });
+                    }, 50);
+                  }}
                   className="py-2.5 rounded-[18px] text-center transition-all"
                   style={{ backgroundColor: reminderAnchor === opt.value ? "#F7DFE8" : "#F7F7F7", boxShadow: reminderAnchor === opt.value ? "inset 0 0 0 1.5px #D76D9C" : "none" }}>
                   <p className="text-[14px] leading-none mb-0.5">{opt.icon}</p>
@@ -646,7 +750,7 @@ export default function Home() {
                 <div className="flex gap-3">
                   <div className="flex-1">
                     <p className="text-[11px] text-black/35 font-bold text-center mb-1.5">时</p>
-                    <div className="h-[160px] overflow-y-auto no-scrollbar rounded-[18px]" style={{ backgroundColor: "#F7F7F7" }}>
+                    <div ref={hourScrollRef} className="h-[160px] overflow-y-auto no-scrollbar rounded-[18px]" style={{ backgroundColor: "#F7F7F7" }}>
                       {HOURS.map(h => (
                         <button key={h} onClick={() => setReminderHour(h)}
                           className="w-full py-2.5 text-center text-[15px] font-bold transition-all"
@@ -659,7 +763,7 @@ export default function Home() {
                   <div className="flex items-center text-[22px] font-black text-black/20 pb-1">:</div>
                   <div className="flex-1">
                     <p className="text-[11px] text-black/35 font-bold text-center mb-1.5">分</p>
-                    <div className="h-[160px] overflow-y-auto no-scrollbar rounded-[18px]" style={{ backgroundColor: "#F7F7F7" }}>
+                    <div ref={minuteScrollRef} className="h-[160px] overflow-y-auto no-scrollbar rounded-[18px]" style={{ backgroundColor: "#F7F7F7" }}>
                       {MINUTES.map(m => (
                         <button key={m} onClick={() => setReminderMinute(m)}
                           className="w-full py-2.5 text-center text-[15px] font-bold transition-all"

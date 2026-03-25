@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:web": "next build",
+    "build:mobile": "NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE next build",
     "start": "next start",
     "lint": "eslint",
-    "android:build:web": "next build",
-    "android:sync": "npm run android:build:web && npx cap sync android",
+    "android:sync": "npm run build:mobile && npx cap sync android",
     "android:open": "npx cap open android"
   },
   "dependencies": {
@@ -16,12 +17,13 @@
     "@capacitor/cli": "^8.2.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/ios": "^8.2.0",
-    "@prisma/client": "^7.5.0",
+    "@prisma/client": "^6.19.2",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.38.0",
+    "jose": "^6.2.2",
     "lucide-react": "^0.577.0",
     "next": "16.2.0",
-    "prisma": "^7.5.0",
+    "prisma": "^6.19.2",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
