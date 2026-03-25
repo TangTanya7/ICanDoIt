@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
         avatarUrl: user.avatarUrl,
       },
     });
-  } catch {
-    return NextResponse.json({ error: "服务器错误" }, { status: 500 });
+  } catch (e) {
+    console.error("verify-code error:", e);
+    const msg = e instanceof Error ? e.message : "服务器错误";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

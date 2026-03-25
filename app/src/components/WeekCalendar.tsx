@@ -47,7 +47,7 @@ export default function WeekCalendar({
             }}
           >
             <StreakFire size={16} />
-            <span>{currentStreak > 0 ? `连续${currentStreak}天` : "尚未连胜"}</span>
+            <span>{currentStreak > 0 ? `连续${currentStreak}天` : "开启连胜！"}</span>
           </div>
         </div>
 

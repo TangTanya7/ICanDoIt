@@ -63,12 +63,12 @@ export default function LoginPage() {
     <div className="mobile-container flex flex-col relative overflow-hidden bg-[#FBFBFB]">
       <div className="flex-1 flex flex-col justify-center px-8">
         <div className="mb-12 text-center">
-          <div className="text-[48px] mb-3">✨</div>
+          <div className="text-[48px] mb-3">⭐</div>
           <h1 className="text-[24px] font-extrabold text-[#222]">ICanDoIt</h1>
           <p className="text-[14px] text-black/50 mt-1.5">让坚持自然发生</p>
         </div>
 
-        <div className="bg-white rounded-[24px] p-6 shadow-sm">
+        <div className="bg-white rounded-[24px] p-6">
           {step === "phone" ? (
             <>
               <p className="text-[13px] font-bold text-[#222] mb-3">手机号登录</p>

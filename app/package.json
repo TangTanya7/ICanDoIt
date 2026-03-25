@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:web": "next build",
+    "build": "prisma generate && next build",
+    "build:web": "prisma generate && next build",
     "build:mobile": "NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
     "android:sync": "npm run build:mobile && npx cap sync android",
